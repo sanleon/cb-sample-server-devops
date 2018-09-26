@@ -1,0 +1,66 @@
+steps:
+  # Clusterを取得
+  - id: get cluster
+    name: 'gcr.io/cloud-builders/gcloud'
+    args:
+    - beta
+    - container
+    - clusters
+    - get-credentials
+    - $_ENV-cb-sample-server
+    - --zone=$_ZONE
+    - --project=$PROJECT_ID
+  - id: delete config for app
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'delete'
+    - 'configmap'
+    - 'server-config'
+  - id: set config for app
+    name: 'gcr.io/cloud-builders/kubectl'
+    # configフォルダを利用します
+    dir: config
+    args:
+    - 'create'
+    - 'configmap'
+    - 'server-config'
+    - '--from-file=config.yaml=$_ENV-config.yaml'
+#  - id: set config for app
+#    name: 'gcr.io/cloud-builders/kubectl'
+#    # configフォルダを利用します
+#    dir: config
+#    args:
+#    - 'replace'
+#    - '--force'
+#    - '-o'
+#    - 'yaml'
+#    - '-f'
+#    - './$_ENV-config.yaml'
+  # アプリをデプロイする
+  - id: Deploy Application
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'apply'
+    - '--filename=deployment.yaml'
+  # イメージをDeploymentにセットする
+  - id: Set image for Deploy
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'set'
+    - 'image'
+    - 'deployment/cb-sample-server'
+    - 'cb-sample-server=asia.gcr.io/$PROJECT_ID/cb-sample-server:$TAG_NAME'
+  # NodePortのサービスを登録する 30580->8080
+  - id: Set service
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'apply'
+    - '--filename=service.yaml'
+  # デプロイのステータス確認
+  - id: Rollout status
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'rollout'
+    - 'status'
+    - 'deployment/cb-sample-server'
+

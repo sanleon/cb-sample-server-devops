@@ -1,0 +1,69 @@
+steps:
+  # Clusterを取得
+  - id: get cluster
+    name: 'gcr.io/cloud-builders/gcloud'
+    args:
+    - beta
+    - container
+    - clusters
+    - get-credentials
+    - $_ENV-cb-sample-server
+    - --zone=$_ZONE
+    - --project=$PROJECT_ID
+  # 既存のConfigを削除
+  - id: delete old a config for app
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'delete'
+    - 'configmap'
+    - 'server-config'
+  # 新しいのConfigを設定
+  - id: set new a config for app
+    name: 'gcr.io/cloud-builders/kubectl'
+    # configフォルダを利用します
+    dir: config
+    args:
+    - 'create'
+    - 'configmap'
+    - 'server-config'
+    - '--from-file=config.yaml=$_ENV-config.yaml'
+  # アプリをデプロイする
+  - id: Deploy Application
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'apply'
+    - '--filename=deployment.yaml'
+  # イメージをDeploymentにセットする
+  - id: Set image for Deploy
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'set'
+    - 'image'
+    - 'deployment/cb-sample-server'
+    - 'cb-sample-server=asia.gcr.io/$PROJECT_ID/cb-sample-server:$TAG_NAME'
+  # NodePortのサービスを登録する 30580->8080
+  - id: Set service
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'apply'
+    - '--filename=service.yaml'
+  # デプロイのステータス確認
+  - id: Rollout status
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'rollout'
+    - 'status'
+    - 'deployment/cb-sample-server'
+  # デプロイが無事に終了したら、realease tagを更新する
+  - id: Pull Docker Image
+    waitFor: ['Rollout status']
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['pull', 'asia.gcr.io/$PROJECT_ID/cb-sample-server:$TAG_NAME']
+  - id: Docker image tag update
+    waitFor: ['Pull Docker Image']
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['tag', 'asia.gcr.io/$PROJECT_ID/cb-sample-server:$TAG_NAME', 'asia.gcr.io/$PROJECT_ID/cb-sample-server:$_RELEASE_TAG']
+  - id: Push Docker Image
+    waitFor: ['Docker image tag update']
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia.gcr.io/$PROJECT_ID/cb-sample-server']

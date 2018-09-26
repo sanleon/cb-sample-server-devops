@@ -1,0 +1,32 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: cb-sample-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: cb-sample-server
+  template:
+    metadata:
+      labels:
+        name: cb-sample-server
+        cluster_name: cb-sample-server
+    spec:
+      containers:
+      - name: cb-sample-server
+        image: asia.gcr.io/${PROJECT_ID}/cb-sample-server:latest
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        # config用volumeMount追加
+        volumeMounts:
+        - mountPath: /usr/local/config
+          name: config
+      # config用volume設定
+      volumes:
+      - name: config
+        configMap:
+          name: server-config
+  revisionHistoryLimit: 100
+
